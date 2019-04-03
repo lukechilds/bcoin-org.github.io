@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Address - bcoin apps</title>
+  </head>
+  <body style='text-align: center; font-size:22px;'>
+    <br>
+
+    <label for='xpub'>Extended public key: </label>
+    <input id='xpub' style='width:80%; font-size:22px;font-family: monospace' oninput='parseXpub()'
+      value='tpubDC5FSnBiZDMmhiuCmWAYsLwgLYrrT9rAqvTySfuCCrgsWz8wxMXUS9Tb9iVMvcRbvFcAHGkMD5Kx8koh4GquNGNTfohfk7pgjhaPCdXpoba'>
+    <div id='xpub-check' style='height:35px'></div>
+    <br>
+
+    <div>
+      <div id='explain'
+        style='
+          text-align: left;
+          margin: auto;
+          font-family: monospace;
+          font-size: 20px;
+          font-style: italic;
+          display: inline-block;
+      '></div>
+    </div>
+    <br>
+
+    <div style='font-family:monospace'>
+      Derivation path:
+      <span id='pathprefix'>
+      </span><input type='number' onchange='parseXpub()' style='width:40px' id='branch' min='0' value='0'>/<input type='number' onchange='parseXpub()' style='width:40px' id='index' min='0' value='0'>
+    </div>
+    <br>
+
+    <div style='font-family:monospace'>
+      <span id='bip44path'></span>
+    </div>
+    <br>
+
+    <div id='address' style='font-family: monospace;'></div>
+    <br>
+
+    <div style='text-align:left'>
+      <span style='font-style: italic; font-size: 15px'>
+        This webpage is for informational purposes ONLY.<br>
+        Always make sure your computational environment is compeltely secure
+        before generating or deriving any cryptographic material.<br>
+        <a href='https://bcoin.io/guides/webapp'>Read the accompanying guide to learn how this site
+        was made</a>.
+      </span>
+    </div>
+
+    <script type='text/javascript' src='HD.js'></script>
+    <script type='text/javascript' src='KeyRing.js'></script>
+    <script type='text/javascript'>
+
+function parseXpub() {
+  const string = document.getElementById('xpub').value;
+
+  // import and check xpub
+  let xpub;
+  try {
+    xpub = HD.fromBase58(string);
+  } catch (e) {
+    document.getElementById('xpub-check').innerHTML =
+      `<span style='color:red'>Bad xpub: ${e.message}</span>`;
+    document.getElementById('explain').innerHTML = '';
+    document.getElementById('address').innerHTML = '';
+    document.getElementById('pathprefix').innerHTML = '';
+    document.getElementById('bip44path').innerHTML = '';
+    return false;
+  }
+  document.getElementById('xpub-check').innerHTML =
+    `<span style='color:green'>xpub OK</span>`;
+
+  // derive metadata
+  const names = {
+    x: 'main',
+    t: 'testnet',
+    r: 'regtest',
+    s: 'simnet'
+  };
+  const network = names[string[0]];
+  const depth = xpub.depth;
+  const childIndex = xpub.childIndex;
+  const hard = childIndex >= HD.common.HARDENED;
+  const account = hard ? (childIndex - HD.common.HARDENED) : childIndex;
+
+  // derive child key
+  const branch = parseInt(document.getElementById('branch').value);
+  const index = parseInt(document.getElementById('index').value);
+  const key = xpub.derive(branch, false).derive(index, false);
+
+  // derive SegWit and Legacy addresses
+  const ringL = KeyRing.fromPublic(key.publicKey);
+  ringL.witness = false;
+  const legAddr = ringL.getAddress('base58', network);
+  const ringW = KeyRing.fromPublic(key.publicKey);
+  ringW.witness = true;
+  const witAddr = ringW.getAddress('string', network);
+  
+  // print output
+  let explain = '';
+  let path = '';
+  let bip44path = '';
+  const coins = {
+    main: 0,
+    testnet: 1,
+    regtest: 1,
+    simnet: 115
+  };
+
+  explain += `Network: ${network}<br>`;
+  explain += `Depth: ${depth}<br>`;
+  explain += `Child Index: ${account + (hard ? "'" : '')}<br>`;
+  document.getElementById('explain').innerHTML = explain;
+
+  path += 'm/';
+  for (let i = 1; i < depth; i++)
+    path += '?/';
+  if (depth)
+    path += `${account + (hard ? "'" : '')}/`;
+  document.getElementById('pathprefix').innerHTML = path
+
+  // try to parse BIP44 path
+  if (depth === 3 && hard) {
+    bip44path += '(Possible BIP44 path: ';
+    bip44path += "m/44'/";
+    bip44path += coins[network] + "'/";
+    bip44path += account + "'/";
+    bip44path += branch + "/";
+    bip44path += index;
+    bip44path += ")<br>";
+    if (branch === 0 || branch ===1)
+      bip44path += "Branch: " + (branch === 0 ? 'Receive' : 'Change');
+    document.getElementById('bip44path').innerHTML = bip44path;
+  } else
+    document.getElementById('bip44path').innerHTML = '';
+
+  let addrInfo = '';
+  addrInfo += `Legacy address: ${legAddr}<br>`;
+  addrInfo += `SegWit address: ${witAddr}`;
+  document.getElementById('address').innerHTML = addrInfo;
+}
+
+// on load default value
+parseXpub();
+    </script>
+  </body>
+</html>
